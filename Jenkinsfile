@@ -20,6 +20,7 @@ pipeline {
     M84_REPORT_DIR = 'ci/m84-reports'
     M84_BUILD_DIR = 'ci/m84-builds'
     M84_GATE_DIR = 'ci/m84-gate'
+    M84_DIST_DIR = 'CGC_Release/dist'
   }
 
   stages {
@@ -48,6 +49,7 @@ pipeline {
                 --aggregate-dir "%WORKSPACE%\\%M84_REPORT_DIR%"
             """
             stash name: 'm84-report-windows', includes: 'ci/m84-reports/windows.json,ci/m84-reports/host-build-windows.json', allowEmpty: true
+            stash name: 'm84-output-windows', includes: 'ci/m84-builds/windows/**/*', allowEmpty: true
             archiveArtifacts artifacts: 'ci/m84-reports/windows.json,ci/m84-reports/host-build-windows.json,ci/m84-builds/windows/**/*', fingerprint: true, allowEmptyArchive: true
           }
         }
@@ -67,6 +69,7 @@ pipeline {
                 --aggregate-dir "${WORKSPACE}/${M84_REPORT_DIR}"
             '''
             stash name: 'm84-report-macos', includes: 'ci/m84-reports/macos.json,ci/m84-reports/host-build-macos.json', allowEmpty: true
+            stash name: 'm84-output-macos', includes: 'ci/m84-builds/macos/**/*', allowEmpty: true
             archiveArtifacts artifacts: 'ci/m84-reports/macos.json,ci/m84-reports/host-build-macos.json,ci/m84-builds/macos/**/*', fingerprint: true, allowEmptyArchive: true
           }
         }
@@ -86,6 +89,7 @@ pipeline {
                 --aggregate-dir "${WORKSPACE}/${M84_REPORT_DIR}"
             '''
             stash name: 'm84-report-linux', includes: 'ci/m84-reports/linux.json,ci/m84-reports/host-build-linux.json', allowEmpty: true
+            stash name: 'm84-output-linux', includes: 'ci/m84-builds/linux/**/*', allowEmpty: true
             archiveArtifacts artifacts: 'ci/m84-reports/linux.json,ci/m84-reports/host-build-linux.json,ci/m84-builds/linux/**/*', fingerprint: true, allowEmptyArchive: true
           }
         }
@@ -98,7 +102,7 @@ pipeline {
         deleteDir()
         checkout scm
         script {
-          ['m84-report-windows', 'm84-report-macos', 'm84-report-linux'].each { stashName ->
+          ['m84-report-windows', 'm84-report-macos', 'm84-report-linux', 'm84-output-windows', 'm84-output-macos', 'm84-output-linux'].each { stashName ->
             try {
               unstash stashName
             } catch (Exception ignored) {
@@ -118,7 +122,16 @@ pipeline {
           python3 scripts/ci/render_m84_gate_config.py \
             --base-config "${WORKSPACE}/CGC_Release/m8_gate.yaml" \
             --output-config "${WORKSPACE}/${M84_REPORT_DIR}/m84-only.yaml" \
-            --matrix-dir "${WORKSPACE}/${M84_REPORT_DIR}"
+            --matrix-dir "${WORKSPACE}/${M84_REPORT_DIR}" \
+            --dist-dir "${WORKSPACE}/${M84_DIST_DIR}"
+          python3 scripts/ci/collect_release_dist.py \
+            --matrix-dir "${WORKSPACE}/${M84_REPORT_DIR}" \
+            --build-artifacts-dir "${WORKSPACE}/${M84_BUILD_DIR}" \
+            --dist-dir "${WORKSPACE}/${M84_DIST_DIR}" \
+            --release-assets-dir "${WORKSPACE}/${M84_DIST_DIR}/release_assets" \
+            --required-platform windows \
+            --required-platform macos \
+            --required-platform linux
           python3 CGC_Release/m8_gate.py \
             --output-dir "${WORKSPACE}/${M84_GATE_DIR}" \
             --config "${WORKSPACE}/${M84_REPORT_DIR}/m84-only.yaml" \
@@ -127,7 +140,7 @@ pipeline {
       }
       post {
         always {
-          archiveArtifacts artifacts: 'ci/m84-reports/**/*,ci/m84-gate/**/*', fingerprint: true, allowEmptyArchive: true
+          archiveArtifacts artifacts: 'ci/m84-reports/**/*,ci/m84-builds/**/*,ci/m84-gate/**/*,CGC_Release/dist/**/*', fingerprint: true, allowEmptyArchive: true
         }
       }
     }

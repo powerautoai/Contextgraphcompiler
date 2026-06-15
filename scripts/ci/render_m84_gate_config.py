@@ -10,6 +10,7 @@ import yaml
 
 MATRIX_ONLY_CHECK_IDS = {
     "build_release_matrix_contract",
+    "build_dist_manifest_contract",
     "windows_artifact_size_budget_contract",
     "macos_artifact_size_budget_contract",
     "linux_artifact_size_budget_contract",
@@ -21,11 +22,13 @@ def main() -> int:
     parser.add_argument("--base-config", required=True, help="Path to the base m8_gate.yaml")
     parser.add_argument("--output-config", required=True, help="Path to write the rendered matrix-only config")
     parser.add_argument("--matrix-dir", required=True, help="Directory containing windows.json / macos.json / linux.json")
+    parser.add_argument("--dist-dir", required=True, help="Directory containing CGC_Release/dist and build_matrix_manifest.json")
     args = parser.parse_args()
 
     base_config = Path(args.base_config).expanduser().resolve()
     output_config = Path(args.output_config).expanduser().resolve()
     matrix_dir = str(Path(args.matrix_dir).expanduser().resolve())
+    dist_dir = str(Path(args.dist_dir).expanduser().resolve())
 
     config = yaml.safe_load(base_config.read_text(encoding="utf-8")) or {}
     if not isinstance(config, dict):
@@ -49,6 +52,8 @@ def main() -> int:
             continue
         check = dict(raw_check)
         check["matrix_dir"] = matrix_dir
+        if check_id == "build_dist_manifest_contract":
+            check["dist_dir"] = dist_dir
         filtered_checks.append(check)
     selected_section["checks"] = filtered_checks
 

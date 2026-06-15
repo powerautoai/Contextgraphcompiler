@@ -96,6 +96,13 @@ def _resolve_build_matrix_dir(check: Dict[str, Any], runtime_context: Dict[str, 
     return (Path(str(runtime_context["output_dir"])) / "m84_release_matrix").resolve()
 
 
+def _resolve_build_dist_dir(check: Dict[str, Any], runtime_context: Dict[str, Any]) -> Path:
+    explicit = str(check.get("dist_dir") or runtime_context.get("build_dist_dir") or "").strip()
+    if explicit:
+        return Path(explicit).expanduser().resolve()
+    return (Path(str(runtime_context["output_dir"])) / "CGC_Release" / "dist").resolve()
+
+
 def _build_report_payload_ok(payload: Dict[str, Any], required_fields: list[str], *, platform_name: str = "", expected_package_format: str = "") -> Dict[str, Any]:
     missing_fields = _check_required_fields(payload, required_fields)
     actual_platform = str(payload.get("platform") or "").strip()
@@ -116,6 +123,16 @@ def _build_report_payload_ok(payload: Dict[str, Any], required_fields: list[str]
         "actual_platform": actual_platform,
         "actual_package_format": actual_package_format,
     }
+
+
+def _budget_level(*, actual: int, soft_target: int, hard_limit: int) -> str:
+    if actual <= 0:
+        return "FAIL"
+    if hard_limit > 0 and actual > hard_limit:
+        return "FAIL"
+    if soft_target > 0 and actual > soft_target:
+        return "WARN"
+    return "PASS"
 
 
 def _prepare_model_fixtures(output_dir: Path) -> Dict[str, str]:
@@ -516,6 +533,52 @@ def _run_check(repo_root: Path, check: Dict[str, Any], runtime_context: Dict[str
             },
         )
 
+    if kind == "build_dist_manifest_contract":
+        dist_dir = _resolve_build_dist_dir(check, runtime_context)
+        manifest_path = (dist_dir / "build_matrix_manifest.json").resolve()
+        manifest_payload = _read_json(manifest_path) if manifest_path.exists() else {}
+        required_fields = [str(x) for x in (check.get("required_fields") or [])]
+        missing_fields = _check_required_fields(manifest_payload, required_fields)
+        required_platforms = [str(x) for x in (check.get("required_platforms") or ["windows", "macos", "linux"])]
+        platform_entries = (manifest_payload.get("platforms") if isinstance(manifest_payload.get("platforms"), dict) else {}) or {}
+        missing_platforms = [platform_name for platform_name in required_platforms if platform_name not in platform_entries]
+        invalid_platforms = []
+        for platform_name in required_platforms:
+            entry = platform_entries.get(platform_name) if isinstance(platform_entries.get(platform_name), dict) else {}
+            if not entry:
+                continue
+            if not bool(entry.get("dist_artifact_exists")) or not bool(entry.get("release_asset_exists")):
+                invalid_platforms.append(platform_name)
+                continue
+            dist_artifact_path = Path(str(entry.get("dist_artifact_path") or "")).expanduser()
+            release_asset_path = Path(str(entry.get("release_asset_path") or "")).expanduser()
+            if not dist_artifact_path.exists() or not release_asset_path.exists():
+                invalid_platforms.append(platform_name)
+        ok = (
+            manifest_path.exists()
+            and str(manifest_payload.get("status") or "") == "PASS"
+            and not missing_fields
+            and not missing_platforms
+            and not invalid_platforms
+        )
+        runtime_context["build_dist_manifest"] = manifest_payload
+        runtime_context["build_dist_dir"] = str(dist_dir)
+        return CheckResult(
+            check_id=check_id,
+            kind=kind,
+            status="PASS" if ok else "FAIL",
+            target=str(manifest_path),
+            details={
+                "dist_dir": str(dist_dir),
+                "manifest_path": str(manifest_path),
+                "manifest_exists": manifest_path.exists(),
+                "missing_fields": missing_fields,
+                "required_platforms": required_platforms,
+                "missing_platforms": missing_platforms,
+                "invalid_platforms": invalid_platforms,
+            },
+        )
+
     if kind == "artifact_size_budget":
         report_platform = str(check.get("report_platform") or "").strip()
         if report_platform:
@@ -526,18 +589,30 @@ def _run_check(repo_root: Path, check: Dict[str, Any], runtime_context: Dict[str
         package_format = str(payload.get("package_format") or "")
         size_bytes = int(payload.get("size_bytes") or 0)
         executable_size_bytes = int(payload.get("executable_size_bytes") or 0)
-        max_size_bytes = int(check.get("max_size_bytes") or 0)
-        max_executable_size_bytes = int(check.get("max_executable_size_bytes") or 0)
+        soft_target_size_bytes = int(check.get("soft_target_size_bytes") or 0)
+        soft_target_executable_size_bytes = int(check.get("soft_target_executable_size_bytes") or 0)
+        hard_limit_size_bytes = int(check.get("hard_limit_size_bytes") or check.get("max_size_bytes") or 0)
+        hard_limit_executable_size_bytes = int(check.get("hard_limit_executable_size_bytes") or check.get("max_executable_size_bytes") or 0)
         expected_platform = str(check.get("expected_platform") or "").strip()
         expected_package_format = str(check.get("expected_package_format") or "").strip()
+        size_budget_level = _budget_level(
+            actual=size_bytes,
+            soft_target=soft_target_size_bytes,
+            hard_limit=hard_limit_size_bytes,
+        )
+        executable_budget_level = _budget_level(
+            actual=executable_size_bytes,
+            soft_target=soft_target_executable_size_bytes,
+            hard_limit=hard_limit_executable_size_bytes,
+        )
+        budget_status = "FAIL" if "FAIL" in {size_budget_level, executable_budget_level} else ("WARN" if "WARN" in {size_budget_level, executable_budget_level} else "PASS")
         ok = (
             bool(payload)
             and size_bytes > 0
             and executable_size_bytes > 0
             and (not expected_platform or platform_name == expected_platform)
             and (not expected_package_format or package_format == expected_package_format)
-            and (max_size_bytes <= 0 or size_bytes <= max_size_bytes)
-            and (max_executable_size_bytes <= 0 or executable_size_bytes <= max_executable_size_bytes)
+            and budget_status != "FAIL"
         )
         return CheckResult(
             check_id=check_id,
@@ -548,10 +623,15 @@ def _run_check(repo_root: Path, check: Dict[str, Any], runtime_context: Dict[str
                 "report_platform": report_platform,
                 "platform": platform_name,
                 "package_format": package_format,
+                "budget_status": budget_status,
+                "size_budget_level": size_budget_level,
+                "executable_budget_level": executable_budget_level,
                 "size_bytes": size_bytes,
                 "executable_size_bytes": executable_size_bytes,
-                "max_size_bytes": max_size_bytes,
-                "max_executable_size_bytes": max_executable_size_bytes,
+                "soft_target_size_bytes": soft_target_size_bytes,
+                "soft_target_executable_size_bytes": soft_target_executable_size_bytes,
+                "hard_limit_size_bytes": hard_limit_size_bytes,
+                "hard_limit_executable_size_bytes": hard_limit_executable_size_bytes,
                 "expected_platform": expected_platform,
                 "expected_package_format": expected_package_format,
             },
@@ -910,6 +990,7 @@ def run_m8_gate(*, repo_root: str, output_dir: str, config_path: Optional[str] =
     m83_takeover_stream_check = _find_check(m83_section, "serve_takeover_contract")
     m84_build_check = _find_check(m84_section, "cgc_build_release_contract")
     m84_matrix_check = _find_check(m84_section, "build_release_matrix_contract")
+    m84_manifest_check = _find_check(m84_section, "build_dist_manifest_contract")
     m84_size_check = _find_check(m84_section, "artifact_size_budget_contract")
     m84_windows_size_check = _find_check(m84_section, "windows_artifact_size_budget_contract")
     m84_macos_size_check = _find_check(m84_section, "macos_artifact_size_budget_contract")
@@ -983,7 +1064,7 @@ def run_m8_gate(*, repo_root: str, output_dir: str, config_path: Optional[str] =
             },
         },
         "m84_cgc_build_release_acceptance": {
-            "status": "PASS" if all(str(check.get("status") or "FAIL") == "PASS" for check in (m84_build_check, m84_matrix_check, m84_size_check, m84_windows_size_check, m84_macos_size_check, m84_linux_size_check)) else "FAIL",
+            "status": "PASS" if all(str(check.get("status") or "FAIL") == "PASS" for check in (m84_build_check, m84_matrix_check, m84_manifest_check, m84_size_check, m84_windows_size_check, m84_macos_size_check, m84_linux_size_check)) else "FAIL",
             "description": str(((acceptance_contract.get("m84_cgc_build_release_acceptance") or {}) if isinstance(acceptance_contract.get("m84_cgc_build_release_acceptance"), dict) else {}).get("description") or "M8.4 build acceptance"),
             "components": {
                 "cgc_build_release_contract": {
@@ -995,18 +1076,26 @@ def run_m8_gate(*, repo_root: str, output_dir: str, config_path: Optional[str] =
                     "status": str(m84_matrix_check.get("status") or "FAIL"),
                     "matrix_dir": str(((m84_matrix_check.get("details") or {}) if isinstance(m84_matrix_check.get("details"), dict) else {}).get("matrix_dir") or ""),
                 },
+                "build_dist_manifest_contract": {
+                    "status": str(m84_manifest_check.get("status") or "FAIL"),
+                    "manifest_path": str(((m84_manifest_check.get("details") or {}) if isinstance(m84_manifest_check.get("details"), dict) else {}).get("manifest_path") or ""),
+                },
                 "artifact_size_budget": {
                     "status": str(m84_size_check.get("status") or "FAIL"),
                     "size_bytes": int((((m84_size_check.get("details") or {}) if isinstance(m84_size_check.get("details"), dict) else {}).get("size_bytes") or 0)),
+                    "budget_status": str((((m84_size_check.get("details") or {}) if isinstance(m84_size_check.get("details"), dict) else {}).get("budget_status") or "")),
                 },
                 "windows_artifact_size_budget": {
                     "status": str(m84_windows_size_check.get("status") or "FAIL"),
+                    "budget_status": str((((m84_windows_size_check.get("details") or {}) if isinstance(m84_windows_size_check.get("details"), dict) else {}).get("budget_status") or "")),
                 },
                 "macos_artifact_size_budget": {
                     "status": str(m84_macos_size_check.get("status") or "FAIL"),
+                    "budget_status": str((((m84_macos_size_check.get("details") or {}) if isinstance(m84_macos_size_check.get("details"), dict) else {}).get("budget_status") or "")),
                 },
                 "linux_artifact_size_budget": {
                     "status": str(m84_linux_size_check.get("status") or "FAIL"),
+                    "budget_status": str((((m84_linux_size_check.get("details") or {}) if isinstance(m84_linux_size_check.get("details"), dict) else {}).get("budget_status") or "")),
                 },
             },
         },

@@ -25,10 +25,11 @@ acceptance_contract:
       - "serve_streaming_local_success"
       - "serve_streaming_m73_takeover"
   m84_cgc_build_release_acceptance:
-    description: "M8.4 採 cgc build host build + build matrix contract + per-platform size budget 多重驗收"
+    description: "M8.4 採 cgc build host build + build matrix contract + dist manifest + per-platform warning/fail size budget 多重驗收"
     components:
       - "cgc_build_release_contract"
       - "build_matrix_contract"
+      - "build_dist_manifest_contract"
       - "artifact_size_budget"
       - "windows_artifact_size_budget"
       - "macos_artifact_size_budget"
@@ -213,7 +214,7 @@ sections:
   - name: m84_release_build
     aliases:
       - "m84_cgc_build_release_acceptance"
-    description: "M8.4 cgc build release contract，覆蓋當前主機真實 build、三平台 matrix 證據與每平台端側安裝包大小預算"
+    description: "M8.4 cgc build release contract，覆蓋當前主機真實 build、三平台 matrix 證據、CGC_Release/dist 收斂與每平台 warning/fail 端側安裝包大小預算"
     min_pass_ratio: 1.0
     checks:
       - id: cgc_build_release_contract
@@ -261,33 +262,56 @@ sections:
           windows: "exe"
           macos: "app_bundle"
           linux: "elf"
+      - id: build_dist_manifest_contract
+        kind: build_dist_manifest_contract
+        required_fields:
+          - "status"
+          - "generated_at"
+          - "matrix_dir"
+          - "matrix_file"
+          - "dist_dir"
+          - "release_assets_dir"
+          - "required_platforms"
+          - "platforms"
+        required_platforms:
+          - "windows"
+          - "macos"
+          - "linux"
       - id: artifact_size_budget_contract
         kind: artifact_size_budget
         expected_platform: "macos"
         expected_package_format: "app_bundle"
-        max_size_bytes: 2147483648
-        max_executable_size_bytes: 1073741824
+        soft_target_size_bytes: 838860800
+        soft_target_executable_size_bytes: 209715200
+        hard_limit_size_bytes: 1288490188
+        hard_limit_executable_size_bytes: 314572800
       - id: windows_artifact_size_budget_contract
         kind: artifact_size_budget
         report_platform: "windows"
         expected_platform: "windows"
         expected_package_format: "exe"
-        max_size_bytes: 2147483648
-        max_executable_size_bytes: 2147483648
+        soft_target_size_bytes: 838860800
+        soft_target_executable_size_bytes: 209715200
+        hard_limit_size_bytes: 1288490188
+        hard_limit_executable_size_bytes: 524288000
       - id: macos_artifact_size_budget_contract
         kind: artifact_size_budget
         report_platform: "macos"
         expected_platform: "macos"
         expected_package_format: "app_bundle"
-        max_size_bytes: 2147483648
-        max_executable_size_bytes: 1073741824
+        soft_target_size_bytes: 838860800
+        soft_target_executable_size_bytes: 209715200
+        hard_limit_size_bytes: 1288490188
+        hard_limit_executable_size_bytes: 314572800
       - id: linux_artifact_size_budget_contract
         kind: artifact_size_budget
         report_platform: "linux"
         expected_platform: "linux"
         expected_package_format: "elf"
-        max_size_bytes: 2147483648
-        max_executable_size_bytes: 2147483648
+        soft_target_size_bytes: 838860800
+        soft_target_executable_size_bytes: 209715200
+        hard_limit_size_bytes: 1288490188
+        hard_limit_executable_size_bytes: 524288000
 
 output:
   report_file: "report.json"
