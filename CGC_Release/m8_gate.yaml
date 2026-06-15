@@ -1,0 +1,295 @@
+name: "CGC_M8_Productization_Gate"
+description: "M8.0 產品化與開發者體驗 Gate，採 M7.5 API 相容性 + M8 cgc 指令雙驗收，覆蓋 list/run/serve/claude 與 route evidence"
+version: "1.0"
+acceptance_contract:
+  m8_overall:
+    description: "M8 採 M7.5 API 相容性 + M8 cgc 指令雙驗收"
+    components:
+      - "m75_api_compatibility"
+      - "m8_cgc_commands"
+  m81_dual_acceptance:
+    description: "M8.1 採 M7.5 API 相容性 + Claude Code 雙驗收"
+    components:
+      - "m75_api_compatibility"
+      - "claude_code"
+  m82_cgc_run_route_dual_acceptance:
+    description: "M8.2 採 cgc run response contract + route decision takeover 雙驗收"
+    components:
+      - "cgc_run_local_success"
+      - "route_decision_local_success"
+      - "cgc_run_m73_takeover"
+      - "route_decision_m73_takeover"
+  m83_serve_streaming_takeover_acceptance:
+    description: "M8.3 採 serve streaming local success + M7.3 takeover 雙驗收"
+    components:
+      - "serve_streaming_local_success"
+      - "serve_streaming_m73_takeover"
+  m84_cgc_build_release_acceptance:
+    description: "M8.4 採 cgc build host build + build matrix contract + per-platform size budget 多重驗收"
+    components:
+      - "cgc_build_release_contract"
+      - "build_matrix_contract"
+      - "artifact_size_budget"
+      - "windows_artifact_size_budget"
+      - "macos_artifact_size_budget"
+      - "linux_artifact_size_budget"
+
+sections:
+  - name: m81_productization
+    aliases:
+      - "m81_m75_claude_dual_acceptance"
+    description: "M8.1 採 M7.5 API 相容性 + Claude Code 雙驗收，並覆蓋使用者模型接入與 NFS 模型發現"
+    min_pass_ratio: 1.0
+    checks:
+      - id: m75_api_compat_foundation
+        kind: nested_gate_contract
+        gate_name: "m75"
+        required_checks:
+          - "api_surface"
+          - "client_entrypoints"
+          - "edge_router_backend"
+      - id: product_entry_list_contract
+        kind: cgc_list_contract
+        schema_path: "ComputeGraphCompiler-main/docs/technical_whitepapers/CGC_CLI_RESPONSE_SCHEMA_v0.1.json"
+        required_fields:
+          - "status"
+          - "command"
+          - "generated_at"
+          - "models"
+          - "summary.total_models"
+        required_sources:
+          - "local"
+          - "nfs"
+          - "registry"
+        required_model_ids:
+          - "deepseek-v4-flash:latest"
+          - "minicpm5-1b"
+      - id: claude_takeover_contract
+        kind: claude_contract
+        expected_patterns:
+          - "Launching Claude Code CLI"
+          - "Claude Code"
+
+  - name: m82_cli_build
+    aliases:
+      - "m82_cgc_run_route_dual_acceptance"
+    description: "M8.2 cgc run response contract，覆蓋 M4 local success 與 M4->M7.3 takeover evidence"
+    min_pass_ratio: 1.0
+    checks:
+      - id: cgc_run_response_contract
+        kind: cgc_run_contract
+        schema_path: "ComputeGraphCompiler-main/docs/technical_whitepapers/CGC_CLI_RESPONSE_SCHEMA_v0.1.json"
+        required_fields:
+          - "status"
+          - "command"
+          - "selected_model"
+          - "resolved_model_path"
+          - "format"
+          - "selected_route"
+          - "selected_backend"
+          - "local_execution"
+          - "decision_reason.code"
+          - "evidence_paths.run_report"
+          - "evidence_paths.m4_inference_report"
+          - "evidence_paths.edge_inference_bridge"
+          - "evidence_paths.route_decision"
+        required_evidence_keys:
+          - "run_report"
+          - "m4_inference_report"
+          - "edge_inference_bridge"
+          - "route_decision"
+        expected_route: "m4_local"
+        expected_backend: "omlx_mlx_lm"
+        expected_local_execution: true
+        expected_cloud_bridge_used: false
+      - id: route_decision_contract
+        kind: route_decision_evidence
+        required_fields:
+          - "selected_route"
+          - "selected_backend"
+          - "decision_reason.code"
+          - "evidence_paths.local_infer"
+        expected_route: "m4_local"
+        expected_backend: "omlx_mlx_lm"
+        expected_bridge_status: "PASS"
+      - id: cgc_run_takeover_contract
+        kind: cgc_run_contract
+        model_fixture_key: "local_gguf_model"
+        use_omlx: true
+        prompt: "Explain why fallback routing was selected."
+        max_tokens: 8
+        schema_path: "ComputeGraphCompiler-main/docs/technical_whitepapers/CGC_CLI_RESPONSE_SCHEMA_v0.1.json"
+        required_fields:
+          - "status"
+          - "command"
+          - "selected_model"
+          - "resolved_model_path"
+          - "format"
+          - "selected_route"
+          - "selected_backend"
+          - "local_execution"
+          - "cloud_bridge_used"
+          - "decision_reason.code"
+          - "evidence_paths.local_infer"
+          - "evidence_paths.run_report"
+          - "evidence_paths.m4_inference_report"
+          - "evidence_paths.edge_inference_bridge"
+          - "evidence_paths.route_decision"
+        required_evidence_keys:
+          - "local_infer"
+          - "run_report"
+          - "m4_inference_report"
+          - "edge_inference_bridge"
+          - "route_decision"
+        expected_route: "m73_edge_cloud"
+        expected_backend: "edge_cloud_bridge"
+        expected_local_execution: false
+        expected_cloud_bridge_used: true
+      - id: route_decision_takeover_contract
+        kind: route_decision_evidence
+        required_fields:
+          - "selected_route"
+          - "selected_backend"
+          - "decision_reason.code"
+          - "evidence_paths.local_infer"
+        expected_route: "m73_edge_cloud"
+        expected_backend: "edge_cloud_bridge"
+        expected_bridge_status: "PASS"
+
+  - name: m83_cloud_native
+    aliases:
+      - "m83_serve_streaming_takeover_acceptance"
+    description: "M8.3 cgc serve /api/generate response contract，覆蓋 local success 與 takeover streaming"
+    min_pass_ratio: 1.0
+    checks:
+      - id: serve_response_contract
+        kind: serve_contract
+        schema_path: "ComputeGraphCompiler-main/docs/technical_whitepapers/CGC_CLI_RESPONSE_SCHEMA_v0.1.json"
+        required_first_fields:
+          - "status"
+          - "type"
+          - "model"
+          - "selected_route"
+          - "decision_reason.code"
+        required_final_fields:
+          - "status"
+          - "type"
+          - "model"
+          - "selected_route"
+          - "selected_backend"
+          - "decision_reason.code"
+        expected_first_route: "m4_local"
+        expected_final_route: "m4_local"
+        expected_final_backend: "omlx_mlx_lm"
+        expected_final_local_execution: true
+        expected_final_cloud_bridge_used: false
+      - id: serve_takeover_contract
+        kind: serve_contract
+        model_fixture_key: "local_gguf_model"
+        use_omlx: true
+        prompt: "Return a short fallback confirmation."
+        max_tokens: 8
+        schema_path: "ComputeGraphCompiler-main/docs/technical_whitepapers/CGC_CLI_RESPONSE_SCHEMA_v0.1.json"
+        required_first_fields:
+          - "status"
+          - "type"
+          - "model"
+          - "selected_route"
+          - "decision_reason.code"
+        required_final_fields:
+          - "status"
+          - "type"
+          - "model"
+          - "selected_route"
+          - "selected_backend"
+          - "decision_reason.code"
+          - "evidence_paths.local_infer"
+        expected_first_route: "m4_local"
+        expected_final_route: "m73_edge_cloud"
+        expected_final_backend: "edge_cloud_bridge"
+        expected_final_local_execution: false
+        expected_final_cloud_bridge_used: true
+
+  - name: m84_release_build
+    aliases:
+      - "m84_cgc_build_release_acceptance"
+    description: "M8.4 cgc build release contract，覆蓋當前主機真實 build、三平台 matrix 證據與每平台端側安裝包大小預算"
+    min_pass_ratio: 1.0
+    checks:
+      - id: cgc_build_release_contract
+        kind: build_contract
+        required_fields:
+          - "status"
+          - "builder"
+          - "platform"
+          - "package_format"
+          - "output_path"
+          - "executable_path"
+          - "output_exists"
+          - "size_bytes"
+          - "executable_size_bytes"
+          - "supported_platforms"
+        expected_platform: "macos"
+        expected_package_format: "app_bundle"
+        required_supported_platforms:
+          - "windows"
+          - "macos"
+          - "linux"
+      - id: build_release_matrix_contract
+        kind: build_matrix_contract
+        required_platforms:
+          - "windows"
+          - "macos"
+          - "linux"
+        required_fields:
+          - "status"
+          - "generated_at"
+          - "builder"
+          - "platform"
+          - "host_platform"
+          - "host_arch"
+          - "package_format"
+          - "output_path"
+          - "executable_path"
+          - "output_exists"
+          - "size_bytes"
+          - "executable_size_bytes"
+          - "artifact_sha256"
+          - "executable_sha256"
+          - "supported_platforms"
+        expected_package_formats:
+          windows: "exe"
+          macos: "app_bundle"
+          linux: "elf"
+      - id: artifact_size_budget_contract
+        kind: artifact_size_budget
+        expected_platform: "macos"
+        expected_package_format: "app_bundle"
+        max_size_bytes: 2147483648
+        max_executable_size_bytes: 1073741824
+      - id: windows_artifact_size_budget_contract
+        kind: artifact_size_budget
+        report_platform: "windows"
+        expected_platform: "windows"
+        expected_package_format: "exe"
+        max_size_bytes: 2147483648
+        max_executable_size_bytes: 2147483648
+      - id: macos_artifact_size_budget_contract
+        kind: artifact_size_budget
+        report_platform: "macos"
+        expected_platform: "macos"
+        expected_package_format: "app_bundle"
+        max_size_bytes: 2147483648
+        max_executable_size_bytes: 1073741824
+      - id: linux_artifact_size_budget_contract
+        kind: artifact_size_budget
+        report_platform: "linux"
+        expected_platform: "linux"
+        expected_package_format: "elf"
+        max_size_bytes: 2147483648
+        max_executable_size_bytes: 2147483648
+
+output:
+  report_file: "report.json"
+  summary_file: "summary.json"
+  pass_fail_strategy: "all_sections_must_pass"
