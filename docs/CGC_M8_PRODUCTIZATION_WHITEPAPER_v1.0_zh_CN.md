@@ -6,51 +6,107 @@
 
 ---
 
-## 一、M8 的定义：从 API 相容走向正式产品入口
+## 一、升级目标：M8 产品化与开发者体验正式验收
+为统一开发、测试、CI、交付、GitHub Release 与正式版本发布口径，定义 M8 最小产品化验收门槛。所有指标必须可自动化执行、可程序判断、可输出标准化 `report.json` 与 `summary.json`。
 
-`M8` 的职责不是重复 `M7.5 API compatibility`，而是把可被开发者、测试、CI、客户交付链直接使用的产品入口做成正式 Gate。
+`M8` 的核心职责不是重复 `M7.5 API compatibility`，而是把开发者与交付链真正会接触到的产品入口做成正式 Gate：
 
-因此，`M8` 的总定义为：
+- `M7.5` 解决“接口像不像”
+- `M8` 解决“入口能不能真实工作、能不能被接管、能不能被交付、能不能正式发布”
 
-- `M7.5 API compatibility` 负责 API 面兼容性
-- `M8 productization` 负责 CLI / Serve / Claude Code / Build 的真实入口验收
+### 1. 开发者入口与 Claude Code 双验收（M8.1）｜最小验收规范
+**正式命名：`m81_m75_claude_dual_acceptance`**
 
-换言之：
+**覆盖范围定义**
+- 以 `M7.5 API compatibility` 为底座
+- 以 `cgc list` 为产品入口发现能力
+- 以 `Claude Code` 为开发者接管能力验证
 
-- `M7.5` 解决的是“接口像不像”
-- `M8` 解决的是“产品入口能不能真实工作、能不能被交付、能不能被验收”
+**最小可验收指标**
+- `M7.5` API 基础相容能力通过
+- `cgc list` 可发现 `local`、`nfs`、`registry` 三类来源
+- 必须出现要求中的模型 ID
+- `Claude Code` 接管链可被真实触发，不接受静态 mock
 
----
+**标准证据输出（写入 report.json）**
+- `models[]`
+- `summary.total_models`
+- `required_sources[]`
+- `required_model_ids[]`
+- `claude_takeover_contract.status`
+- `claude_takeover_contract.details.output_excerpt`
 
-## 二、M8 总体验收原则
+### 2. `cgc run` 与 route takeover 双验收（M8.2）｜最小验收规范
+**正式命名：`m82_cgc_run_route_dual_acceptance`**
 
-`M8` 采用双层或多层复合验收，不接受只看静态声明、不接受只看单点命令返回、不接受无证据链的“形式通过”。
+**覆盖范围定义**
+- 覆盖 `cgc run` 本地成功路径
+- 覆盖 route decision 证据输出
+- 覆盖 `M7.3 edge-cloud takeover` 接管路径
 
-所有 M8 子 Gate 必须满足以下原则：
+**最小可验收指标**
+- 本地路径必须能得到 `m4_local` 路由与正确 backend
+- 接管路径必须能得到 `m73_edge_cloud` 路由与 bridge backend
+- local / takeover 两条路线都必须输出完整 evidence paths
+- route decision 必须可回溯 `decision_reason.code`
 
-- 必须输出结构化 `report.json` / `summary.json`
-- 必须保留关键证据字段，能够回溯命令、路径、route、backend、artifact、manifest
-- 必须能区分 local success 与 takeover success
-- 必须能在 CI / 产线环境被自动判定
-- 对于 `M8.4`，必须能区分 warning 与 fail，不能只有单点 hard fail
+**标准证据输出**
+- `selected_route`
+- `selected_backend`
+- `local_execution`
+- `cloud_bridge_used`
+- `decision_reason.code`
+- `evidence_paths.run_report`
+- `evidence_paths.m4_inference_report`
+- `evidence_paths.edge_inference_bridge`
+- `evidence_paths.route_decision`
 
----
+### 3. `cgc serve` streaming 与 M7.3 takeover 双验收（M8.3）｜最小验收规范
+**正式命名：`m83_serve_streaming_takeover_acceptance`**
 
-## 三、M8 总体结构
+**覆盖范围定义**
+- 覆盖 `cgc serve` local streaming success
+- 覆盖 `cgc serve` final takeover success
+- 覆盖 streaming 首包与尾包正式结构
 
-M8 正式由四个子阶段构成：
+**最小可验收指标**
+- first chunk 必须给出 route 与 decision evidence
+- final chunk 必须给出 backend、execution、bridge 使用状态
+- takeover 场景必须能进入 `M7.3 edge_cloud_bridge`
+- local / takeover 两条流式路径都必须可自动判定 PASS/FAIL
 
-- `M8.1` 开发者入口与 Claude Code 双验收
-- `M8.2` `cgc run` 与 route takeover 双验收
-- `M8.3` `cgc serve` streaming 与 M7.3 takeover 双验收
-- `M8.4` `cgc build` release build / dist / manifest / size budget 多重验收
+**标准证据输出**
+- `first.status`, `first.type`, `first.model`
+- `first.selected_route`, `first.decision_reason.code`
+- `final.selected_route`, `final.selected_backend`
+- `final.local_execution`, `final.cloud_bridge_used`
+- `final.evidence_paths.local_infer`
 
-对应正式命名如下：
+### 4. 三平台 release build 与正式交付链验收（M8.4）｜最小验收规范
+**正式命名：`m84_cgc_build_release_acceptance`**
 
-- `M8.1` -> `m81_m75_claude_dual_acceptance`
-- `M8.2` -> `m82_cgc_run_route_dual_acceptance`
-- `M8.3` -> `m83_serve_streaming_takeover_acceptance`
-- `M8.4` -> `m84_cgc_build_release_acceptance`
+**覆盖范围定义**
+- 覆盖当前主机 `cgc build` 真构建证据
+- 覆盖 `windows` / `macos` / `linux` 三平台 matrix build 证据
+- 覆盖 `CGC_Release/dist/{windows,macos,linux}` 正式收敛目录
+- 覆盖 `build_matrix_manifest.json`
+- 覆盖每平台 package size 的 warning / fail 规格治理
+
+**最小可验收指标**
+- 当前主机 build report 字段完整且 package format 正确
+- 三平台必须各自有独立 report 证据
+- `build_matrix.json` 必须存在且状态为 `PASS`
+- `build_matrix_manifest.json` 必须存在且字段完整
+- `dist artifact` 与 `release asset` 必须同时存在
+- package size 不得超过 `hard limit`
+
+**标准证据输出**
+- host build report：`builder`, `platform`, `package_format`, `output_path`, `size_bytes`
+- matrix report：`windows.json`, `macos.json`, `linux.json`, `build_matrix.json`
+- dist manifest：`build_matrix_manifest.json`
+- release dist：`CGC_Release/dist/windows`, `CGC_Release/dist/macos`, `CGC_Release/dist/linux`
+- release assets：`cgc-windows.zip`, `cgc-macos.zip`, `cgc-linux.tar.gz`
+- budget fields：`budget_status`, `size_budget_level`, `executable_budget_level`
 
 ---
 
