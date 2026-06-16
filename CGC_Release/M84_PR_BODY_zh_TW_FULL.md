@@ -1,24 +1,24 @@
-# M8.4 PR 內文（中文完整版）
+# M8.4 GitHub PR 中文完整版
 
 ## PR Title
 
-`補齊 M8.4 三平台 release dist、manifest 與 package size gate`
+`M8.4 三平台 Release Build、Dist Manifest 與 Package Size Gate`
 
 ## PR Body
 
 ```md
 ## 摘要
 
-本 PR 將 `M8.4` 從「僅驗證當前主機可執行 `cgc build`」升級為「可正式交付的 release productization gate」。
+本 PR 將 `M8.4` 從「僅驗證當前主機可執行 `cgc build`」升級為「可正式交付的三平台 Release Build Gate」。
 
 本次調整後，`M8.4` 不再只看單機 build 是否成功，而是同時驗證：
 
-- `windows`、`macos`、`linux` 三平台真實 build 證據
+- `windows`、`macos`、`linux` 三平台真實 Release Build 證據
 - 聚合後的 `build_matrix.json`
-- `CGC_Release/dist/{windows,macos,linux}` 正式收斂目錄
+- `CGC_Release/dist/{windows,macos,linux}` 正式 Dist Manifest 收斂目錄
 - `build_matrix_manifest.json`
 - 每平台 package size 的 `soft target / hard limit / warning-fail` 規則
-- GitHub Actions 與 Jenkins 的 release asset 收斂流程
+- GitHub Actions 與 Jenkins 的 Release Asset 收斂流程
 
 ## 變更重點
 
@@ -79,7 +79,7 @@
 - 缺少 `windows` / `linux` 時，`build_matrix_contract` 會正確 `FAIL`
 - dist / asset 證據不完整時，`build_dist_manifest_contract` 會正確 `FAIL`
 
-這代表 `M8.4` 已從「只檢查 build 指令存在」升級為「能拒絕不完整三平台 release 證據」的正式 gate。
+這代表 `M8.4` 已從「只檢查 build 指令存在」升級為「能拒絕不完整三平台 Release Build 證據」的正式 Gate。
 
 ## 影響檔案
 
@@ -92,6 +92,6 @@
 
 ## 補充說明
 
-- `M8.4 PASS` 現在必須依賴真實 CI 產出的 `windows` / `macos` / `linux` 三平台 artifacts
+- `M8.4 PASS` 現在必須依賴真實 CI 產出的 `windows` / `macos` / `linux` 三平台 Release Artifacts
 - 單機 smoke 可以驗證 gate 邏輯與失敗語義，但不能取代正式三平台 release 證據
 ```

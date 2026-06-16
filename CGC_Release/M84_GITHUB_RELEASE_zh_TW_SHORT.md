@@ -1,4 +1,4 @@
-# M8.4 GitHub Release 中文版說明（短版）
+# M8.4 GitHub Release 中文短版
 
 ## Release Title
 
@@ -9,13 +9,13 @@
 ```md
 ## M8.4 三平台 Release Build、Dist Manifest 與 Package Size Gate
 
-本版本將 `M8.4` 從單機 `cgc build` 檢查，升級為正式三平台 release gate。
+本版本將 `M8.4` 從單機 `cgc build` 檢查，升級為正式三平台 Release Build Gate。
 
 ### 本版重點
 
-- 驗收 `windows` / `macos` / `linux` 三平台 build matrix
+- 驗收 `windows` / `macos` / `linux` 三平台 Release Build Matrix
 - 驗收 `build_matrix.json` 與 `build_matrix_manifest.json`
-- 收斂 `CGC_Release/dist/{windows,macos,linux}`
+- 收斂 `CGC_Release/dist/{windows,macos,linux}` Dist Manifest
 - 發佈 `release_assets`
 - 將 package size 升級為 `soft target / hard limit / warning-fail`
 

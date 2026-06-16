@@ -1,4 +1,4 @@
-# M8.4 GitHub Release 中文版說明（完整版）
+# M8.4 GitHub Release 中文完整版
 
 ## Release Title
 
@@ -9,13 +9,13 @@
 ```md
 ## M8.4 三平台 Release Build、Dist Manifest 與 Package Size Gate
 
-本版本將 `M8.4` 從「只驗證當前主機可執行 `cgc build`」正式升級為「可交付、可發佈、可在 CI/產線被驗收的 release gate」。
+本版本將 `M8.4` 從「只驗證當前主機可執行 `cgc build`」正式升級為「可交付、可發佈、可在 CI/產線被驗收的三平台 Release Build Gate」。
 
 ### 本版重點
 
-- 補齊 `windows` / `macos` / `linux` 三平台真實 build matrix 驗收
+- 補齊 `windows` / `macos` / `linux` 三平台真實 Release Build Matrix 驗收
 - 補齊 `build_matrix.json` 聚合驗收
-- 補齊 `CGC_Release/dist/{windows,macos,linux}` 正式收斂目錄
+- 補齊 `CGC_Release/dist/{windows,macos,linux}` 正式 Dist Manifest 收斂目錄
 - 補齊 `build_matrix_manifest.json`
 - 補齊 `release_assets` 產物收斂與發佈流程
 - 將 package size 升級為 `soft target / hard limit / warning-fail` 正式產品規格
@@ -53,9 +53,9 @@ CI 成功後，三平台產物會收斂到：
 而是表示：
 
 - host build 證據成立
-- 三平台 matrix 證據齊全
-- dist 收斂證據齊全
-- release asset 證據齊全
+- 三平台 Release Build Matrix 證據齊全
+- Dist Manifest 收斂證據齊全
+- Release Asset 證據齊全
 - package size 符合正式產品規格
 
 ### 補充說明

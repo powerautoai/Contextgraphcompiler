@@ -1,22 +1,22 @@
-# M8.4 PR 內文（中文短版）
+# M8.4 GitHub PR 中文短版
 
 ## PR Title
 
-`補齊 M8.4 三平台 release dist、manifest 與 package size gate`
+`M8.4 三平台 Release Build、Dist Manifest 與 Package Size Gate`
 
 ## PR Body
 
 ```md
 ## 摘要
 
-本 PR 將 `M8.4` 從「僅驗證當前主機 `cgc build` 可執行」升級為「正式 release productization gate」。
+本 PR 將 `M8.4` 從「僅驗證當前主機 `cgc build` 可執行」升級為「正式三平台 Release Build Gate」。
 
 ## 主要變更
 
-- 新增三平台 `windows` / `macos` / `linux` build matrix 驗收
-- 新增 `build_matrix_manifest.json` 與 `CGC_Release/dist/{windows,macos,linux}` 收斂驗收
+- 新增三平台 `windows` / `macos` / `linux` Release Build Matrix 驗收
+- 新增 `build_matrix_manifest.json` 與 `CGC_Release/dist/{windows,macos,linux}` Dist Manifest 驗收
 - 將 package size 升級為 `soft target / hard limit / warning-fail` 兩段式規格
-- 補齊 GitHub Actions / Jenkins 的 release asset 收斂流程
+- 補齊 GitHub Actions / Jenkins 的 Release Asset 收斂流程
 
 ## 驗收語義
 
@@ -35,5 +35,5 @@
 - `macos` 單平台 smoke 可通過 size budget 驗收
 - 缺少 `windows` / `linux` 時，matrix / dist manifest 會正確 `FAIL`
 
-這表示 `M8.4` 已能拒絕不完整的三平台 release 證據，而不再只是單機 build 檢查。
+這表示 `M8.4` 已能拒絕不完整的三平台 Release Build 證據，而不再只是單機 build 檢查。
 ```
